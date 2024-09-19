@@ -21,7 +21,6 @@ async def app(
         params = dict(
             param.split("=") for param in query_params.split("&")
         )  # конвертируем в словарь
-
         # Логика подсчета факториала
         if "number" in params:  # проверим, что параметр number есть
             try:  # пытаемся преобразовать number в число
@@ -39,8 +38,7 @@ async def app(
         else:  # если number не передан
             response_body = json.dumps({"error": "Missing number"})
             status_code = 400  # статус 400, так как параметр отсутствует
-
-    # Если запрос на путь /fibonacci и метод GET и параметр index есть
+    # добавляем логику для обработки фибоначчи
     elif (
         scope["path"] == "/fibonacci"
         and scope["method"] == "GET"
@@ -70,6 +68,35 @@ async def app(
         else:  # если index не передан
             response_body = json.dumps({"error": "Missing index"})
             status_code = 400
+    # добавляем логику для вычисления среднего значения
+    elif (
+        scope["path"] == "/mean"
+        and scope["method"] == "GET"
+        and "query_string" in scope
+    ):
+        query_params = scope["query_string"].decode(
+            "utf-8"
+        )  # декодируем параметры в строку
+        params = dict(
+            param.split("=") for param in query_params.split("&")
+        )  # конвертируем в словарь
+        # Логика подсчета среднего
+        if "numbers" in params:  # проверим, что параметр numbers есть
+            try:
+                numbers = list(
+                    map(int, params["numbers"].split(","))
+                )  # преобразуем список чисел
+                if len(numbers) == 0:
+                    raise ValueError
+                mean_value = sum(numbers) / len(numbers)  # вычисляем среднее
+                response_body = json.dumps({"mean": mean_value})  # возвращаем результат
+                status_code = 200  # успешный запрос
+            except ValueError:  # если numbers не являются числом или список пуст
+                response_body = json.dumps({"error": "Invalid numbers"})
+                status_code = 400
+        else:  # если numbers не передан
+            response_body = json.dumps({"error": "Missing numbers"})
+            status_code = 400
     else:  # если запрос не соответствует нашим ожиданиям
         response_body = json.dumps({"error": "Invalid request"})
         status_code = 400  # статус 400, так как запрос некорректен
@@ -91,9 +118,10 @@ async def app(
     )
 
 
-# Пример запроса
+# Пример запросов
 # curl "http://localhost:8000/factorial?number=5"
 # curl "http://localhost:8000/fibonacci?index=5"
+# curl "http://localhost:8000/mean?numbers=1,2,3,4,5"
 if __name__ == "__main__":
     import uvicorn
 
