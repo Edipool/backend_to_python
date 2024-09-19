@@ -27,7 +27,7 @@ python lessen_1/exercise_1.py
 ```
 Откройте терминал и введите следующие команды:
 ```
-curl "http://localhost:8000/factorial?number=5"
-curl "http://localhost:8000/fibonacci?index=5"
-curl "http://localhost:8000/mean?numbers=1,2,3,4,5"
+# curl "http://localhost:8000/factorial?n=5"
+# curl "http://localhost:8000/fibonacci/5"
+# curl -X GET -d "[1.0, 2.3, 3.6]" "http://localhost:8000/mean"
 ```
