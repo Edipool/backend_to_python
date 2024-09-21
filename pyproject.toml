@@ -1,15 +1,24 @@
 [tool.poetry]
-name = "backend-to-python"
+name = "backend_to_python"
 version = "0.1.0"
 description = ""
 authors = ["Eduard Poliakov <ya.polykov@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "3.12.3"
+python = "^3.12"
 uvicorn = "^0.30.6"
+fastapi = "^0.114.2"
+requests = "^2.32.3"
 pre-commit = "^3.8.0"
 
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.6.5"
+
+
+[tool.poetry.group.test.dependencies]
+pytest = "^8.3.3"
 
 [build-system]
 requires = ["poetry-core"]

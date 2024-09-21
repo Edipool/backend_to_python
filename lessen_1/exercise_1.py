@@ -1,4 +1,5 @@
 import json
+import urllib.parse
 from typing import Any, Awaitable, Callable
 
 
@@ -10,21 +11,18 @@ async def app(
     assert scope["type"] == "http"  # проверим, что это http запрос
 
     # проверим, что запрос сделан к пути "/factorial"
-    if (
-        scope["path"] == "/factorial"
-        and scope["method"] == "GET"
-        and "query_string" in scope
-    ):
-        query_params = scope["query_string"].decode(
+    if scope["path"] == "/factorial" and scope["method"] == "GET":
+        query_params = scope.get("query_string", b"").decode(
             "utf-8"
         )  # декодируем параметры в строку
-        params = dict(
-            param.split("=") for param in query_params.split("&")
-        )  # конвертируем в словарь
+        params = {
+            k: v[0] for k, v in urllib.parse.parse_qs(query_params).items()
+        }  # конвертируем в словарь
 
         if "n" in params:  # проверим, что параметр n есть
+            n_value = params["n"]
             try:  # пытаемся преобразовать n в число
-                number = int(params["n"])  # преобразуем в число
+                number = int(n_value)  # преобразуем в число
                 if number < 0:
                     raise ValueError(
                         "Negative number"
@@ -35,53 +33,71 @@ async def app(
                     result *= i  # умножаем на i
                 response_body = json.dumps({"result": result})  # возвращаем результат
                 status_code = 200  # успешный запрос
-            except ValueError:  # если n не является числом или < 0
-                response_body = json.dumps({"error": "Invalid or negative number"})
-                status_code = 400  # ошибка ввода, статус 400
+            except ValueError as e:  # если n не является числом или < 0
+                if str(e) == "Negative number":
+                    response_body = json.dumps({"error": "Negative number"})
+                    status_code = 400  # ошибка отрицательного числа, статус 400
+                else:
+                    response_body = json.dumps({"error": "Invalid parameter 'n'"})
+                    status_code = 422  # ошибка ввода, статус 422
         else:  # если n не передан
             response_body = json.dumps({"error": "Missing parameter 'n'"})
             status_code = 422  # статус 422, так как параметр отсутствует или неверен
 
     # проверим, что запрос сделан к пути "/fibonacci"
     elif scope["path"].startswith("/fibonacci/") and scope["method"] == "GET":
-        try:
-            # Извлекаем параметр n из URL path
-            n_str = scope["path"].split("/")[2]
-            index = int(n_str)  # преобразуем в число
-            if index < 0:
-                raise ValueError(
-                    "Negative index"
-                )  # возвращаем 400 для отрицательного числа
+        path_parts = scope["path"].split("/")
+        if len(path_parts) >= 3 and path_parts[2]:
+            n_str = path_parts[2]
+            try:
+                index = int(n_str)  # преобразуем в число
+                if index < 0:
+                    raise ValueError(
+                        "Negative index"
+                    )  # возвращаем 400 для отрицательного числа
 
-            # Логика подсчета числа Фибоначчи
-            a, b = 0, 1
-            for _ in range(index):
-                a, b = b, a + b
-            response_body = json.dumps({"result": a})  # возвращаем результат
-            status_code = 200  # успешный запрос
-        except (IndexError, ValueError):  # если n не является числом или < 0
-            response_body = json.dumps({"error": "Invalid or missing index"})
-            status_code = (
-                422 if "n" not in scope["path"] else 400
-            )  # 422 если не число, 400 если отрицательное
+                # Логика подсчета числа Фибоначчи
+                a, b = 0, 1
+                for _ in range(index):
+                    a, b = b, a + b
+                response_body = json.dumps({"result": a})  # возвращаем результат
+                status_code = 200  # успешный запрос
+            except ValueError as e:
+                if str(e) == "Negative index":
+                    response_body = json.dumps({"error": "Negative index"})
+                    status_code = 400  # ошибка отрицательного индекса, статус 400
+                else:
+                    response_body = json.dumps({"error": "Invalid index"})
+                    status_code = 422  # ошибка ввода, статус 422
+        else:
+            response_body = json.dumps({"error": "Missing index"})
+            status_code = 422  # статус 422, индекс отсутствует
 
     # проверим, что запрос сделан к пути "/mean"
     elif scope["path"] == "/mean" and scope["method"] == "GET":
-        message = await receive()  # получаем тело запроса
+        body = b""
+        while True:
+            message = await receive()  # получаем тело запроса
+            if message["type"] != "http.request":
+                continue
+            body += message.get("body", b"")
+            if not message.get("more_body", False):
+                break
         try:
-            body = json.loads(
-                message.get("body", b"").decode("utf-8")
-            )  # парсим тело как JSON
-            if not isinstance(body, list) or not all(
-                isinstance(x, (int, float)) for x in body
+            body_data = json.loads(body.decode("utf-8"))  # парсим тело как JSON
+            if not isinstance(body_data, list) or not all(
+                isinstance(x, (int, float)) for x in body_data
             ):
                 raise ValueError("Invalid input")  # если не массив чисел
-            if len(body) == 0:
+            if len(body_data) == 0:
                 raise ValueError("Empty array")  # если массив пуст
-            mean_value = sum(body) / len(body)  # вычисляем среднее
+            mean_value = sum(body_data) / len(body_data)  # вычисляем среднее
             response_body = json.dumps({"result": mean_value})  # возвращаем результат
             status_code = 200  # успешный запрос
-        except ValueError as e:  # если тело не массив float'ов или оно пустое
+        except (
+            ValueError,
+            json.JSONDecodeError,
+        ) as e:  # если тело не массив чисел или оно пустое
             if str(e) == "Empty array":
                 response_body = json.dumps({"error": "Empty array"})
                 status_code = 400  # ошибка пустого массива, статус 400
